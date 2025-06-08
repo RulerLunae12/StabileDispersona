@@ -1,17 +1,15 @@
 default persistent.human_dict = {}
 default current_edit_word = None
-default translation_text = ""
-default translation_input = ""
-default current_input_word = ""
-default word_to_translate = ""
 default temp_translation = ""
 default edited_words = {}
 default selected_word = None
+default persistent.first_cleanup_done = False
 
 init python:
 
-    if not hasattr(persistent, "human_dict"):
+    if persistent.human_dict is None or not isinstance(persistent.human_dict, dict):
         persistent.human_dict = {}
+
 
     config.say_menu_text_filter = None 
 
@@ -27,12 +25,13 @@ init python:
 
 label show_dictionary:
     $ _window_hide()
+    $ init_temp_edits()
     call screen human_dictionary()
     $ _window_show()
     return
 
 label show_translation_screen(word):
-    $ temp_translation = get_translation(word) or ""
+    $ temp_translation = persistent.human_dict.get(word, {}).get("translation", "")
     call screen enter_translation_screen(word)
     return
 
