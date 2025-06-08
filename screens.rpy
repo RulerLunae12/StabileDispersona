@@ -1635,9 +1635,7 @@ screen chthon_dialogue(text):
         for word in text.split(" "):
 
             $ cleaned_word = normalize_word(word)
-            $ translation_data = get_translation(cleaned_word)
-            $ is_known = translation_data["known"]
-            $ translation = translation_data["translation"]
+            $ translation = get_translation(cleaned_word)
 
             vbox:
                 spacing 3
@@ -1650,34 +1648,37 @@ screen chthon_dialogue(text):
 
                     textbutton "Сохранить":
                         action [
-                            Function(save_translation, cleaned_word, temp_translation),
+                            Function(set_translation, cleaned_word, temp_translation),
                             SetVariable("current_edit_word", None),
                             Function(renpy.save_persistent)
                         ]
 
                 else:
-                    if is_known and translation:
+                    if translation:
                         text "[translation]" size 18 color "#888"
 
                     textbutton word:
                         action [
                             SetVariable("current_edit_word", cleaned_word),
-                            SetVariable("temp_translation", translation)
+                            SetVariable("temp_translation", translation if translation else "")
                         ]
 
 screen human_dictionary():
     tag menu
 
-    # Создаём временные правки для перевода
-    default temp_edits = init_temp_edits()
+    default temp_edits = {
+        word: {"translation": data["translation"] if isinstance(data, dict) else data}
+        for word, data in persistent.human_dict.items()
+        if (isinstance(data, dict) and data.get("translation", "").strip() != "") or isinstance(data, str)
+    }
+
 
     frame:
         style "menu_frame"
-        style_prefix "pref"
+        xsize 800
+        ysize 600
         xalign 0.5
         yalign 0.5
-        xsize 600
-        ysize 500
 
         vbox:
             spacing 10
@@ -1687,7 +1688,6 @@ screen human_dictionary():
                 draggable True
                 mousewheel True
                 scrollbars "vertical"
-                ymaximum 350
 
                 vbox:
                     spacing 10
@@ -1695,25 +1695,28 @@ screen human_dictionary():
                     for word in sorted(temp_edits.keys()):
                         hbox:
                             spacing 10
+
                             text "[word]:" size 22
 
+                            $ translation = ""
+                            if isinstance(persistent.human_dict.get(word), dict):
+                                translation = persistent.human_dict[word].get("translation", "")
+                            elif isinstance(persistent.human_dict.get(word), str):
+                                translation = persistent.human_dict[word]  # старый формат
+
+                            textbutton "[translation or 'Добавить перевод']":
+                                action Call("edit_translation", word)
+                                text_color "#e2007a"
+
                             input:
-                                default temp_edits[word]
-                                changed (lambda val, w=word: temp_edits.__setitem__(w, val))
-                                length 40
-                                xsize 200
-                                allow ".*"
+                                default temp_edits[word]["translation"]
+                                changed Function(set_translation_temp, word, temp_edits)
+                                length 50
+
 
             textbutton "Сохранить":
                 action [
-                    Function(
-                        lambda: [
-                            persistent.human_dict.__setitem__(word, {
-                                "translation": temp_edits[word],
-                                "known": True
-                            }) for word in temp_edits
-                        ]
-                    ),
+                    Function(update_translations, temp_edits),
                     Function(renpy.save_persistent),
                     Return()
                 ]
@@ -1734,118 +1737,32 @@ screen dictionary_button():
             idle "gui/icons/Писька.png"
             hover "gui/icons/Писька2.png"
             tooltip "Словарь"
-            action Function(renpy.call_screen, "human_dictionary")
+            action Function(renpy.call, "human_dictionary")
 
-    key "d" action Function(renpy.call_screen, "human_dictionary")
+    key "d" action Function(renpy.call, "human_dictionary")
 
-screen enter_translation_screen(word, translation=None):
-    
-    default temp_translation = get_translation(word).get("translation", "")
-
+screen enter_translation_screen(word):
     modal True
 
     frame:
-        style_prefix "pref"
-        xalign 0.5
-        yalign 0.5
-
+        padding (20, 20)
         vbox:
             spacing 10
+            text "Введите перевод для: [word]"
 
-            label "Наверное, слово [word] означает:"
-
-            input:
-                default temp_translation
-                changed (lambda val: setattr(store, "temp_translation", val))
-                length 50
-                allow ".*"
+            input value VariableInputValue("temp_translation"):
+                length 30
+                xsize 300
+                allow "abcdefghijklmnopqrstuvwxyzабвгдеёжзийклмнопрстуфхцчшщьыъэюя -ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+                copypaste True
 
             textbutton "Сохранить":
                 action [
+                    Function(print, f"🛠 До set_translation: {word} = {temp_translation}"),
                     Function(set_translation, word, temp_translation),
+                    Function(print, f"💾 После: {persistent.human_dict}"),
                     Return()
                 ]
 
             textbutton "Отмена":
                 action Return()
-
-
-screen chthon_dictionary():
-    tag menu
-    modal True
-
-    default temp_dict = persistent.human_dict.copy()
-    default selected_word = None
-
-    frame:
-        style_prefix "pref"
-        xalign 0.5
-        yalign 0.5
-        xsize 600
-        ysize 500
-        padding (20, 20)
-
-        vbox:
-            spacing 10
-
-            hbox:
-                spacing 20
-                xfill True
-
-                text "Словарь (β-редактор)":
-                    size 28
-                    xalign 0.0
-                    color "#ff0088"
-
-                text "Измените перевод,\nзатем нажмите 'Сохранить'":
-                    size 16
-                    color "#ffffff"
-
-                textbutton "Закрыть":
-                    xalign 1.0
-                    action Return()
-
-            viewport:
-                scrollbars "vertical"
-                mousewheel True
-                draggable True
-                ymaximum 350
-
-                vbox:
-                    spacing 10
-
-                    for word in sorted(temp_dict.keys()):
-
-                        hbox:
-                            spacing 10
-
-                            text "[word] →"
-
-                            if selected_word == word:
-                                input:
-                                    default temp_dict[word]
-                                    changed (lambda val, w=word: temp_dict.__setitem__(w, val))
-                                    xsize 200
-                            else:
-                                textbutton temp_dict[word]:
-                                    action SetVariable("selected_word", word)
-                                    xsize 200
-                                    xalign 0.0
-
-            hbox:
-                spacing 20
-                xalign 0.5
-
-                textbutton "Сохранить":
-                    action [
-                        Function(lambda: persistent.human_dict.update(temp_dict)),
-                        SetVariable("selected_word", None),
-                        Return()
-                    ]
-
-                textbutton "Сбросить":
-                    action [
-                        SetVariable("temp_dict", persistent.human_dict.copy()),
-                        SetVariable("selected_word", None),
-                        Function(renpy.restart_interaction)
-                    ]
