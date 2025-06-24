@@ -1,19 +1,58 @@
-define p1 = Character('[viname]', color="#ffff", what_callback=translate_filter)
-define p2 = Character('Краули', color="#ffff", what_callback=translate_filter)
-define p3 = Character('Сильваир', color="#ffff", what_callback=translate_filter)
-define p4 = Character('Чопт', color="#ffff", what_callback=translate_filter)
-define p5 = Character('Скарлателла', color="#ffff", what_callback=translate_filter)
-define p6 = Character('Касси', color="#ffff", what_callback=translate_filter)
-define e = Character('ÃêÐ¯Û¥√╬µ', color="#ffff", what_callback=translate_filter)
+define p1 = Character('[viname]', color="#ffff", what_filter=lambda text: apply_translation_styles(translate_filter(text)))
+define p2 = Character('Краули', color="#ffff", what_filter=lambda text: apply_translation_styles(translate_filter(text)))
+define p3 = Character('Сильваир', color="#ffff", what_filter=lambda text: apply_translation_styles(translate_filter(text)))
+define p4 = Character('Чопт', color="#ffff", what_filter=lambda text: apply_translation_styles(translate_filter(text)))
+define p5 = Character('Скарлателла', color="#ffff", what_filter=lambda text: apply_translation_styles(translate_filter(text)))
+define p6 = Character('Касси', color="#ffff", what_filter=lambda text: apply_translation_styles(translate_filter(text)))
+define e = Character('ÃêÐ¯Û¥√╬µ', color="#ffff", what_filter=lambda text: apply_translation_styles(translate_filter(text)))
 
 label start:
 
-    $ clean_unused_words()
+    $ dictionary_button = False
+
     $ normalize_human_dict()
     $ migrate_human_dict()
 
+    if persistent.first_playthrough_done:
+        jump dict 
+    else:
+        jump prologue
+
+label dict:
+
+    $ dictionary_button = False
+
     window hide
     scene black
+
+    show text"""
+    Ранее в оригинальном Homicipher распостраненной проблемой
+    было заполнение словаря... 
+
+    Игрокам приходилось снова и снова вводить одни и 
+    те же слова, чтобы понимать своих любимых героев.
+
+    В данной же фанатской игре мы решили сделать так, чтобы игроки сами решали, 
+    хотят ли они из разу в раз вводить слова, или же просто читать текст, 
+    не отвлекаясь на перевод одних и тех же слов.
+
+    Хотите очистить словарь?
+    """ at truecenter with fade
+    pause
+    hide text
+
+    menu:
+        "Да, очистить словарь":
+            $ persistent.human_dict.clear()
+            $ renpy.save_persistent()
+            "Словарь очищен."
+
+        "Нет, не очищать словарь":
+            "Хорошо, продолжим."
+
+label prologue: 
+
+    $ dictionary_button = False
 
     show text"""
     Эта игра является художественным произведением в жанре Alternate Reality Game (ARG).
@@ -44,6 +83,10 @@ label start:
 
 label name:
 
+    $ dictionary_button = False
+
+    $ persistent.first_playthrough_done = True
+
     scene black
 
     "Как тебя зовут?"
@@ -64,19 +107,27 @@ label name:
 
             "Нет, я передумал!":
 
-                jump intro_text
+                jump name
 
     elif viname == "":
         "Ты не можешь оставить это поле пустым!"
 
-        jump start
-    
-    else:
+        jump name
+
+    elif viname == "Адам":
+
         jump intro_text
 
+    else:
+        jump intro
 
 label hardmode:
+
+    $ dictionary_button = False
+
     scene black
+
+    ##Слышим тяжелый удар, а затем тяжелое дыхание
 
     ##экран темный, шорох, Адами просыпается и поднимается с колен. видим стартовую сцену из оригинальной игры
 
